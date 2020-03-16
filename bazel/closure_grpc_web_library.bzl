@@ -16,33 +16,6 @@ load(
     "closure_proto_aspect",
 )
 
-# This was borrowed from Rules Go, licensed under Apache 2.
-# https://github.com/bazelbuild/rules_go/blob/67f44035d84a352cffb9465159e199066ecb814c/proto/compiler.bzl#L72
-def _proto_path(proto):
-    path = proto.path
-    root = proto.root.path
-    ws = proto.owner.workspace_root
-    if path.startswith(root):
-        path = path[len(root):]
-    if path.startswith("/"):
-        path = path[1:]
-    if path.startswith(ws):
-        path = path[len(ws):]
-    if path.startswith("/"):
-        path = path[1:]
-    return path
-
-def _proto_include_path(proto):
-    path = proto.path[:-len(_proto_path(proto))]
-    if not path:
-        return "."
-    if path.endswith("/"):
-        path = path[:-1]
-    return path
-
-def _proto_include_paths(protos):
-    return [_proto_include_path(proto) for proto in protos]
-
 def _generate_closure_grpc_web_src_progress_message(name):
     # TODO(yannic): Add a better message?
     return "Generating GRPC Web %s" % name
@@ -54,14 +27,10 @@ def _generate_closure_grpc_web_srcs(
         import_style,
         mode,
         sources,
-        transitive_sources):
+        transitive_sources,
+        source_roots):
     all_sources = [src for src in sources] + [src for src in transitive_sources.to_list()]
-    proto_include_paths = [
-        "-I%s" % p
-        for p in _proto_include_paths(
-            [f for f in all_sources],
-        )
-    ]
+    proto_include_paths = ["-I%s".format(p) for p in source_roots]
 
     grpc_web_out_common_options = ",".join([
         "import_style={}".format(import_style),
@@ -119,6 +88,7 @@ def _closure_grpc_web_library_impl(ctx):
         mode = ctx.attr.mode,
         sources = dep[ProtoInfo].direct_sources,
         transitive_sources = dep[ProtoInfo].transitive_imports,
+        source_roots = dep[ProtoInfo].transitive_proto_path.to_list(),
     )
 
     deps = unfurl(ctx.attr.deps, provider = "closure_js_library")
